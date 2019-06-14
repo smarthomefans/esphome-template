@@ -6,8 +6,8 @@ esphome 模板分享项目，大家有什么好的模板欢迎提交pr
 ---
 
 +-- 实现功能  
-|   +-- README.md 
-|   +-- config.yaml  
+|   +-- README.md   
+|   +-- config.yaml    
 
 
 
