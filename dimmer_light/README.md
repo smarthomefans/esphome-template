@@ -1,6 +1,6 @@
 # 调光灯 (Dimmer Light)
 
->> Apply to ESPhome 1.14.3
+> Apply to ESPhome 1.14.3
 
 ## 需求
 
@@ -24,7 +24,7 @@
 | GPIO12    | 虚拟，状态灯 ON 颜色 | 悬空      |
 | GPIO13    | 虚拟，状态灯 OFF 颜色| 悬空      |
 | GPIO18    | 面板状态灯2         | 2812mini  |
-| GPIO19    | 面板状态灯2         | 2812mini  |
+| GPIO19    | 面板状态灯1         | 2812mini  |
 | GPIO21    | 调光灯输出3         | MOS_3     |
 | GPIO23    | 调光灯输出1         | MOS_1     |
 | GPIO25    | 调光灯输出2         | MOS_2     |
