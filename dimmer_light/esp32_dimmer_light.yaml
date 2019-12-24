@@ -1,0 +1,286 @@
+# Apply to ESPHOME 1.14.3
+substitutions:
+  devicename: 'dt_dimmer_led_test'
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+  api_password: !secret api_password
+  ota_password: !secret ota_password
+  status_transition_length: "4s"
+  dimmer_transition_length: "4s"
+
+esphome:
+  name: $devicename
+  platform: ESP32
+  board: nodemcu-32s
+  on_boot:
+    - light.turn_on: on_color
+    - light.turn_on: off_color
+  on_loop:
+
+    # 通过 remote_values 获取灯的状态
+    # 然后修改二元传感器shadow_1
+    # 通过 shadow_1 二元传感器来反馈给 template 开关。如 dt_td_1
+    lambda: |-
+      if (id(dimmer_1).remote_values.get_state() != 0.0) {
+        id(shadow_1).publish_state(true);
+      } else {
+        id(shadow_1).publish_state(false);
+      }
+      if (id(dimmer_2).remote_values.get_state() != 0.0) {
+        id(shadow_2).publish_state(true);
+      } else {
+        id(shadow_2).publish_state(false);
+      }
+      if (id(dimmer_3).remote_values.get_state() != 0.0) {
+        id(shadow_3).publish_state(true);
+      } else {
+        id(shadow_3).publish_state(false);
+      }
+
+wifi:
+  ssid: $wifi_ssid
+  password: $wifi_password
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: $api_password
+  reboot_timeout: 0s
+
+
+ota:
+  password: $ota_password
+
+light:
+  # 调光输出
+  - platform: monochromatic
+    default_transition_length: $dimmer_transition_length
+    # name: "DT_TD_dimmer_1"
+    output: LED_1_GPIO_23
+    id: dimmer_1
+  - platform: monochromatic
+    default_transition_length: $dimmer_transition_length
+    # name: "DT_TD_dimmer_2"
+    output: LED_2_GPIO_25
+    id: dimmer_2
+  - platform: monochromatic
+    default_transition_length: $dimmer_transition_length
+    # name: "DT_TD_dimmer_3"
+    output: LED_3_GPIO_21
+    id: dimmer_3
+
+  # 开关面板指示灯
+  - platform: fastled_clockless
+    chipset: WS2812
+    pin: GPIO19
+    num_leds: 1
+    rgb_order: GRB
+    name: "DT_DIMMER_STATUS_LED_1"
+    id: "dt_dimmer_status_led_1"
+    default_transition_length: $status_transition_length
+  - platform: fastled_clockless
+    chipset: WS2812
+    pin: GPIO18
+    num_leds: 1
+    rgb_order: GRB
+    name: "DT_DIMMER_STATUS_LED_2"
+    id: "dt_dimmer_status_led_2"
+    default_transition_length: $status_transition_length
+  - platform: fastled_clockless
+    chipset: WS2812
+    pin: GPIO5
+    num_leds: 1
+    rgb_order: GRB
+    name: "DT_DIMMER_STATUS_LED_3"
+    id: "dt_dimmer_status_led_3"
+    default_transition_length: $status_transition_length
+
+    # 利用空的引脚虚拟 rgb 颜色用来选择
+    # ON 的按钮颜色
+  - platform: fastled_clockless
+    chipset: WS2812
+    name: on_color_light
+    pin: GPIO12
+    num_leds: 1
+    rgb_order: GRB
+    id: "on_color"
+    # OFF 的按钮颜色
+  - platform: fastled_clockless
+    chipset: WS2812
+    name: off_color_light
+    pin: GPIO13
+    num_leds: 1
+    rgb_order: GRB
+    id: "off_color"
+
+# 调光 PWM 输出
+output:
+  - platform: ledc
+    pin: GPIO23
+    id: LED_1_GPIO_23
+  - platform: ledc
+    pin: GPIO25
+    id: LED_2_GPIO_25
+  - platform: ledc
+    pin: GPIO21
+    id: LED_3_GPIO_21
+
+switch:
+  # 虚拟开关，用此开关控制所有逻辑
+  - platform: template
+    name: "DT_TD_1"
+    id: "dt_td_1"
+    # 以 shadow 传感器作为判断开和关
+    lambda: |-
+      if (id(shadow_1).state) {
+        return true;
+      } else {
+        return false;
+      }
+    turn_on_action:
+      # 逻辑说明：
+      # auto dimmer_light 声明一个 auto 类名字叫 dimmer_light 的对象，该对象获取 dimmer_1 灯的 LightState 对象
+      # LightState 对象参考：https://www.esphome.io/api/classesphome_1_1light_1_1_light_state.html#a2fa1671847d76f13953fcc83413aab9c
+      # set_transition_length 是设置调光灯的亮起时长达到渐变效果
+      # current_values 是 LightState 对象的一个属性，源于 LightColorValues 类，可通过这个类的 get_rgb get_green get_blue 三个方法获取 RGB 值
+      # auto rgb_light 声明一个 auto 类的 rgb_light 对象，该对象获取 rgb_light 灯的 LightState 对象
+      # float r = id(on_color).current_values.get_red(); 这句获取 on_color 的颜色参数，来得到开启面板状态灯的颜色值。
+      # set_rgb 这里就是设置面板灯的颜色参数
+      # set_brightness 设置面板灯的亮度
+      # perform()，应用上方所有设置。
+      - lambda: |-
+          auto dimmer_light=id(dimmer_1).turn_on();
+          dimmer_light.set_transition_length(3000);
+          dimmer_light.perform();
+          float r = id(on_color).current_values.get_red();
+          float g = id(on_color).current_values.get_green();
+          float b = id(on_color).current_values.get_blue();
+          float brightness = id(on_color).current_values.get_brightness();
+          ESP_LOGD("test", "R:%f G:%f B:%f",r, g, b);
+          auto rgb_light = id(dt_dimmer_status_led_1).turn_on();
+          rgb_light.set_transition_length(3000);
+          rgb_light.set_rgb(r,g,b);
+          rgb_light.set_brightness(brightness),
+          rgb_light.perform();
+    turn_off_action:
+      - lambda: |-
+          auto dimmer_light=id(dimmer_1).turn_off();
+          dimmer_light.set_transition_length(3000);
+          dimmer_light.perform();
+          float r = id(off_color).current_values.get_red();
+          float g = id(off_color).current_values.get_green();
+          float b = id(off_color).current_values.get_blue();
+          ESP_LOGD("test", "R:%f G:%f B:%f",r, g, b);
+          auto rgb_light = id(dt_dimmer_status_led_1).turn_on();
+          rgb_light.set_transition_length(3000);
+          rgb_light.set_rgb(r,g,b);
+          rgb_light.perform();
+
+  - platform: template
+    name: "DT_TD_2"
+    id: "dt_td_2"
+    lambda: |-
+      if (id(shadow_2).state) {
+        return true;
+      } else {
+        return false;
+      }
+    turn_on_action:
+      - lambda: |-
+          auto dimmer_light=id(dimmer_2).turn_on();
+          dimmer_light.set_transition_length(3000);
+          dimmer_light.perform();
+          float r = id(on_color).current_values.get_red();
+          float g = id(on_color).current_values.get_green();
+          float b = id(on_color).current_values.get_blue();
+          ESP_LOGD("test", "R:%f G:%f B:%f",r, g, b);
+          auto rgb_light = id(dt_dimmer_status_led_2).turn_on();
+          rgb_light.set_transition_length(3000);
+          rgb_light.set_rgb(r,g,b);
+          rgb_light.perform();
+    turn_off_action:
+      - lambda: |-
+          auto dimmer_light=id(dimmer_2).turn_off();
+          dimmer_light.set_transition_length(3000);
+          dimmer_light.perform();
+          float r = id(off_color).current_values.get_red();
+          float g = id(off_color).current_values.get_green();
+          float b = id(off_color).current_values.get_blue();
+          ESP_LOGD("test", "R:%f G:%f B:%f",r, g, b);
+          auto rgb_light = id(dt_dimmer_status_led_2).turn_on();
+          rgb_light.set_transition_length(3000);
+          rgb_light.set_rgb(r,g,b);
+          rgb_light.perform();
+
+  - platform: template
+    name: "DT_TD_3"
+    id: "dt_td_3"
+    lambda: |-
+      if (id(shadow_3).state) {
+        return true;
+      } else {
+        return false;
+      }
+    turn_on_action:
+      - lambda: |-
+          auto dimmer_light=id(dimmer_3).turn_on();
+          dimmer_light.set_transition_length(3000);
+          dimmer_light.perform();
+          float r = id(on_color).current_values.get_red();
+          float g = id(on_color).current_values.get_green();
+          float b = id(on_color).current_values.get_blue();
+          ESP_LOGD("test", "R:%f G:%f B:%f",r, g, b);
+          auto rgb_light = id(dt_dimmer_status_led_3).turn_on();
+          rgb_light.set_transition_length(3000);
+          rgb_light.set_rgb(r,g,b);
+          rgb_light.perform();
+    turn_off_action:
+      - lambda: |-
+          auto dimmer_light=id(dimmer_3).turn_off();
+          dimmer_light.set_transition_length(3000);
+          dimmer_light.perform();
+          float r = id(off_color).current_values.get_red();
+          float g = id(off_color).current_values.get_green();
+          float b = id(off_color).current_values.get_blue();
+          ESP_LOGD("test", "R:%f G:%f B:%f",r, g, b);
+          auto rgb_light = id(dt_dimmer_status_led_3).turn_on();
+          rgb_light.set_transition_length(3000);
+          rgb_light.set_rgb(r,g,b);
+          rgb_light.perform();
+
+
+binary_sensor:
+  - platform: gpio
+    internal: true
+    # name: 'SW_DT_TD_1'
+    pin: 
+      number: GPIO4
+      mode: INPUT_PULLUP
+    on_press:
+      then:
+        - switch.toggle: dt_td_1
+  - platform: gpio
+    internal: true
+    # name: 'SW_DT_TD_2'
+    pin: GPIO0
+    on_press:
+      then:
+        - switch.toggle: dt_td_2
+  - platform: gpio
+    internal: true
+    # name: 'SW_DT_TD_3'
+    pin: 
+      number: GPIO2
+      mode: INPUT_PULLUP
+    on_press:
+      then:
+        - switch.toggle: dt_td_3
+  # 作为灯的状态标记
+  - platform: template
+    id: 'shadow_1'
+  - platform: template
+    id: 'shadow_2'
+  - platform: template
+    id: 'shadow_3'
