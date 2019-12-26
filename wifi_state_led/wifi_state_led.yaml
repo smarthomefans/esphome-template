@@ -1,0 +1,125 @@
+# Apply to ESPHOME 1.14.3
+# 测试开发板：Goouuu MiniS1
+# board: ESP8266-S1 由于 PIO 不支持这个板子，山寨板子只有2M Flash故此选择 esp8285
+
+substitutions:
+  devicename: 'wifi_hotport'
+  wifi_ssid: !secret wifi_ssid
+  wifi_password: !secret wifi_password
+  api_password: !secret api_password
+  ota_password: !secret ota_password
+  status_light_time: "4s"
+  hotport_ssid: !secret hotport_ssid
+  hotport_password: !secret hotport_password
+
+esphome:
+  name: $devicename
+  platform: ESP8266
+  board: esp8285
+  on_boot:
+    # --------------------------------------------
+    #这个板子默认亮起 led 灯，所以启动时候要灭掉。
+    - light.turn_off: red_light
+    - light.turn_off: green_light
+    - light.turn_off: blue_light
+  # ----------------------------------------------
+  # 循环检查 wifi 状态，修改指示灯。
+  on_loop:
+    then:
+      # 如果 wifi 未连接，关闭蓝灯，执行 script:red_binary(红灯闪烁)
+      # 这里 script 是异步处理的，script 里面加延迟并不会阻塞主程序
+      # 也不能使用以下方式
+      # ----错误示范-----
+        # on_loop:
+        #   then:
+        #       - light.turn_on: red_light
+        #       - delay: 3s
+        #       - light.turn_off: red_light
+      # -----------------
+      # 上方的做法只是三个任务分开执行,关闭红灯和亮起红灯在主程序时间线上是同步执行的.
+      - if:
+          condition:
+            not:
+              - wifi.connected:
+          then:
+            if:
+              condition:
+                not:
+                  - script.is_running: red_binary
+              then:
+                - script.execute: red_binary
+      # 如果 wifi 连接正常，并蓝灯还没亮起，那么亮起蓝灯。
+      - if:
+          condition:
+            and:
+              - light.is_off: blue_light
+              - wifi.connected:
+          then:
+            - light.turn_on: blue_light
+
+wifi:
+  # 设置ID 可以在 lambda 下用 id($id_name) 调用，继承 WiFiComponent 类。
+  id: wifi_state
+  ssid: $wifi_ssid
+  password: $wifi_password
+  # 启动 AP 模式(不完善)
+  ap:
+    ssid: $hotport_ssid
+    password: $hotport_password
+# AP 模式启动后,需要使用门户修改 SSID 和 Password 的需要启动 captive_portal
+## 但在门户修改 SSID 之后,还需要手动重启 SSID 配置才会生效.
+captive_portal:
+
+# Enable logging
+logger:
+
+# Enable Home Assistant API
+api:
+  password: $api_password
+  reboot_timeout: 0s
+
+
+ota:
+  password: $ota_password
+
+light:
+  - platform: binary
+    name: "red_light"
+    id: "red_light"
+    output: RED_LED_GPIO12
+  - platform: binary
+    name: "blue_light"
+    id: "blue_light"
+    output: BLUE_LED_GPIO14
+  - platform: binary
+    name: "green_light"
+    id: "green_light"
+    output: GREEN_LED_GPIO13
+
+output:
+  - platform: gpio
+    id: RED_LED_GPIO12
+    pin: GPIO12
+    inverted: true
+  - platform: gpio
+    id: BLUE_LED_GPIO14
+    pin: GPIO14
+    inverted: true
+  - platform: gpio
+    id: GREEN_LED_GPIO13
+    pin: GPIO13
+    inverted: true
+
+script:
+  - id: red_binary
+    then:
+      # 如果蓝灯亮起就熄灭它
+      - if:
+          condition:
+            light.is_on: blue_light
+          then:
+            light.turn_off: blue_light
+      - light.turn_on: red_light
+      - delay: 1000ms
+      - light.turn_off: red_light
+      - delay: 1000ms

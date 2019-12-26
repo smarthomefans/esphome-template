@@ -13,6 +13,7 @@ esphome 模板分享项目，大家有什么好的模板欢迎提交pr
 模版列表
 ----
 * [调光灯](./dimmer_light)
+* [WiFi 状态指示灯](./wifi_state_led)
 
 
 License
