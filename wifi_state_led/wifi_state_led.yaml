@@ -110,6 +110,45 @@ output:
     pin: GPIO13
     inverted: true
 
+#--------------------------------------------
+# 快速按8下重启
+binary_sensor:
+  - platform: gpio
+    internal: true
+    pin: GPIO0
+    name: "Button"
+    # 按钮必须翻转才能使用 click 模式
+    filters:
+      - invert:
+    # 多 click 模式
+    on_multi_click:
+    # 双击切换速度及次数，这里是按8次重启
+    - timing:
+        - ON for at most 1s
+        - OFF for at most 1s
+        - ON for at most 1s
+        - OFF for at most 1s
+        - ON for at most 1s
+        - OFF for at most 1s
+        - ON for at most 1s
+        - OFF for at most 1s
+        - ON for at most 1s
+        - OFF for at most 1s
+        - ON for at most 1s
+        - OFF for at most 1s
+        - ON for at most 1s
+        - OFF for at most 1s
+        - ON for at most 1s
+        - OFF for at least 0.2s
+      then:
+        - switch.turn_on: reboot
+
+switch:
+  # reboot
+  - platform: restart
+    id: reboot
+#--------------------------------------------
+
 script:
   - id: red_binary
     then:
